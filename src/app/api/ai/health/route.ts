@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { runHealthAnalysis } from "@/lib/ai/followup";
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const body = await req.json();
+  const { clientId } = body;
+  if (!clientId) return NextResponse.json({ error: "clientId obrigatório" }, { status: 400 });
+
+  const { data: client } = await supabase
+    .from("clients")
+    .select("*")
+    .eq("id", clientId)
+    .single();
+
+  if (!client) return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 });
+
+  await runHealthAnalysis(client);
+
+  const { data: updated } = await supabase
+    .from("clients")
+    .select("health_score, health_summary, health_updated_at")
+    .eq("id", clientId)
+    .single();
+
+  return NextResponse.json(updated);
+}
