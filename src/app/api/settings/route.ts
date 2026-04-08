@@ -7,7 +7,11 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  return NextResponse.json({ settings: readSettings(), availableModels: AVAILABLE_MODELS });
+  const settings = readSettings();
+  const groqConfigured = !!process.env.GROQ_API_KEY;
+  const geminiConfigured = !!process.env.GEMINI_API_KEY;
+
+  return NextResponse.json({ settings, availableModels: AVAILABLE_MODELS, groqConfigured, geminiConfigured });
 }
 
 export async function POST(req: NextRequest) {
@@ -16,13 +20,13 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
-  const { geminiModel } = body;
+  const { aiModel } = body;
 
   const valid = AVAILABLE_MODELS.map((m) => m.value);
-  if (geminiModel && !valid.includes(geminiModel)) {
+  if (!aiModel || !valid.includes(aiModel)) {
     return NextResponse.json({ error: "Modelo inválido" }, { status: 400 });
   }
 
-  const updated = writeSettings({ ...(geminiModel && { geminiModel }) });
+  const updated = writeSettings({ aiModel });
   return NextResponse.json({ settings: updated });
 }

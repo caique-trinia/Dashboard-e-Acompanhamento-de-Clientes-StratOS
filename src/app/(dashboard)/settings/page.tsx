@@ -4,49 +4,54 @@ import { useState, useEffect } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Info, Bot, Loader2 } from "lucide-react";
-import type { SystemSettings } from "@/lib/settings";
+import { CheckCircle, Info, Bot, Loader2, Zap } from "lucide-react";
+import type { SystemSettings, AvailableModel } from "@/lib/settings";
 
-interface AvailableModel { value: string; label: string; description: string }
+interface SettingsData {
+  settings: SystemSettings;
+  availableModels: AvailableModel[];
+  groqConfigured: boolean;
+  geminiConfigured: boolean;
+}
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<SystemSettings | null>(null);
-  const [models, setModels] = useState<AvailableModel[]>([]);
+  const [data, setData] = useState<SettingsData | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
-      .then((d) => {
-        setSettings(d.settings);
-        setModels(d.availableModels);
-      });
+      .then(setData);
   }, []);
 
   async function handleModelChange(model: string) {
-    if (!settings) return;
+    if (!data) return;
     setSaving(true);
     setSaved(false);
     const res = await fetch("/api/settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ geminiModel: model }),
+      body: JSON.stringify({ aiModel: model }),
     });
-    const data = await res.json();
-    if (data.settings) {
-      setSettings(data.settings);
+    const result = await res.json();
+    if (result.settings) {
+      setData((prev) => prev ? { ...prev, settings: result.settings } : prev);
       setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+      setTimeout(() => setSaved(false), 2500);
     }
     setSaving(false);
   }
+
+  const geminiModels = data?.availableModels.filter((m) => m.provider === "gemini") ?? [];
+  const groqModels = data?.availableModels.filter((m) => m.provider === "groq") ?? [];
 
   return (
     <div>
       <Topbar title="Configurações" subtitle="Informações do sistema e variáveis de ambiente" />
       <div className="p-6 space-y-4 max-w-2xl">
 
+        {/* AI Model Selector */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -55,39 +60,61 @@ export default function SettingsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {!settings ? (
+            {!data ? (
               <div className="flex items-center gap-2 text-sm text-slate-400">
                 <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
               </div>
             ) : (
-              <div className="space-y-2">
-                {models.map((m) => (
-                  <label
-                    key={m.value}
-                    className={`flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-colors ${
-                      settings.geminiModel === m.value
-                        ? "border-blue-500 bg-blue-50"
-                        : "border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    <input
-                      type="radio"
-                      name="geminiModel"
-                      value={m.value}
-                      checked={settings.geminiModel === m.value}
-                      onChange={() => handleModelChange(m.value)}
-                      className="mt-0.5"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">{m.label}</p>
-                      <p className="text-xs text-slate-400">{m.description}</p>
-                    </div>
-                    {settings.geminiModel === m.value && (
-                      <Badge variant="success" className="text-xs shrink-0">Ativo</Badge>
+              <div className="space-y-4">
+
+                {/* Gemini group */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Google Gemini</p>
+                    <Badge variant={data.geminiConfigured ? "success" : "destructive"} className="text-xs">
+                      {data.geminiConfigured ? "API Key OK" : "GEMINI_API_KEY ausente"}
+                    </Badge>
+                  </div>
+                  <div className="space-y-1.5">
+                    {geminiModels.map((m) => (
+                      <ModelOption
+                        key={m.value}
+                        model={m}
+                        selected={data.settings.aiModel === m.value}
+                        disabled={!data.geminiConfigured}
+                        onChange={handleModelChange}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                {/* Groq group */}
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide flex items-center gap-1">
+                      <Zap className="h-3 w-3" /> Groq
+                    </p>
+                    <Badge variant={data.groqConfigured ? "success" : "warning"} className="text-xs">
+                      {data.groqConfigured ? "API Key OK" : "GROQ_API_KEY ausente"}
+                    </Badge>
+                    {!data.groqConfigured && (
+                      <span className="text-xs text-slate-400">— adicione no .env.local</span>
                     )}
-                  </label>
-                ))}
-                <div className="flex items-center gap-2 pt-1 h-6">
+                  </div>
+                  <div className="space-y-1.5">
+                    {groqModels.map((m) => (
+                      <ModelOption
+                        key={m.value}
+                        model={m}
+                        selected={data.settings.aiModel === m.value}
+                        disabled={!data.groqConfigured}
+                        onChange={handleModelChange}
+                      />
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 h-5">
                   {saving && (
                     <p className="text-xs text-slate-400 flex items-center gap-1">
                       <Loader2 className="h-3 w-3 animate-spin" /> Salvando...
@@ -104,54 +131,48 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
+        {/* Integrations */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Integrações</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="flex items-center justify-between py-2 border-b">
-              <div>
-                <p className="text-sm font-medium">Asana PAT</p>
-                <p className="text-xs text-slate-400">Token de acesso pessoal para interagir com o Asana</p>
+            {[
+              { label: "Asana PAT", desc: "Token de acesso pessoal para interagir com o Asana" },
+              { label: "Gemini API Key", desc: "Google AI — adicione GEMINI_API_KEY no .env.local" },
+              { label: "Groq API Key", desc: "Groq — adicione GROQ_API_KEY no .env.local (console.groq.com)" },
+              { label: "Supabase", desc: "Banco de dados e autenticação" },
+            ].map((item, i, arr) => (
+              <div key={item.label} className={`flex items-center justify-between py-2 ${i < arr.length - 1 ? "border-b" : ""}`}>
+                <div>
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-slate-400">{item.desc}</p>
+                </div>
+                <Badge variant="outline" className="text-xs">Ver .env.local</Badge>
               </div>
-              <Badge variant="outline" className="text-xs">Verificar no .env.local</Badge>
-            </div>
-            <div className="flex items-center justify-between py-2 border-b">
-              <div>
-                <p className="text-sm font-medium">Gemini API Key</p>
-                <p className="text-xs text-slate-400">Chave de API do Google para automações de IA</p>
-              </div>
-              <Badge variant="outline" className="text-xs">Verificar no .env.local</Badge>
-            </div>
-            <div className="flex items-center justify-between py-2">
-              <div>
-                <p className="text-sm font-medium">Supabase</p>
-                <p className="text-xs text-slate-400">Banco de dados e autenticação</p>
-              </div>
-              <Badge variant="outline" className="text-xs">Verificar no .env.local</Badge>
-            </div>
+            ))}
           </CardContent>
         </Card>
 
+        {/* Setup instructions */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
               <Info className="h-4 w-4" />
-              Como configurar
+              Como configurar o Groq
             </CardTitle>
           </CardHeader>
           <CardContent>
             <ol className="text-sm text-slate-600 space-y-2 list-decimal list-inside">
-              <li>Copie o arquivo <code className="bg-slate-100 px-1 rounded">.env.example</code> para <code className="bg-slate-100 px-1 rounded">.env.local</code></li>
-              <li>Preencha as variáveis com suas credenciais</li>
-              <li>Reinicie o servidor com <code className="bg-slate-100 px-1 rounded">npm run dev:next</code></li>
-              <li>Execute as migrations no Supabase SQL Editor</li>
-              <li>Crie os usuários no painel do Supabase (Authentication &gt; Users)</li>
-              <li>Inicie o cron em outro terminal: <code className="bg-slate-100 px-1 rounded">npm run cron</code></li>
+              <li>Acesse <strong>console.groq.com</strong> e crie uma API Key gratuita</li>
+              <li>Adicione no <code className="bg-slate-100 px-1 rounded">.env.local</code>: <code className="bg-slate-100 px-1 rounded">GROQ_API_KEY=gsk_...</code></li>
+              <li>Reinicie o servidor com <code className="bg-slate-100 px-1 rounded">npm run dev</code></li>
+              <li>Volte aqui e selecione um modelo Groq acima</li>
             </ol>
           </CardContent>
         </Card>
 
+        {/* Authorized users */}
         <Card>
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -171,5 +192,41 @@ export default function SettingsPage() {
         </Card>
       </div>
     </div>
+  );
+}
+
+function ModelOption({
+  model, selected, disabled, onChange,
+}: {
+  model: AvailableModel;
+  selected: boolean;
+  disabled: boolean;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label
+      className={`flex items-start gap-3 p-3 rounded-md border transition-colors ${
+        disabled
+          ? "opacity-40 cursor-not-allowed border-slate-200"
+          : selected
+          ? "border-blue-500 bg-blue-50 cursor-pointer"
+          : "border-slate-200 hover:bg-slate-50 cursor-pointer"
+      }`}
+    >
+      <input
+        type="radio"
+        name="aiModel"
+        value={model.value}
+        checked={selected}
+        disabled={disabled}
+        onChange={() => !disabled && onChange(model.value)}
+        className="mt-0.5"
+      />
+      <div className="flex-1">
+        <p className="text-sm font-medium">{model.label}</p>
+        <p className="text-xs text-slate-400">{model.description}</p>
+      </div>
+      {selected && <Badge variant="success" className="text-xs shrink-0">Ativo</Badge>}
+    </label>
   );
 }
