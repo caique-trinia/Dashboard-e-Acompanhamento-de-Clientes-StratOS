@@ -54,10 +54,12 @@ export async function POST(req: NextRequest) {
     availableTasks
   );
 
-  const result = await generateJson<SuggestTasksResponse>(prompt, {
-    suggestions: [],
-    sprintFocusSummary: "",
-  });
+  let result: SuggestTasksResponse;
+  try {
+    result = await generateJson<SuggestTasksResponse>(prompt);
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
 
   // Log the suggestion action
   await supabase.from("ai_audit_log").insert({

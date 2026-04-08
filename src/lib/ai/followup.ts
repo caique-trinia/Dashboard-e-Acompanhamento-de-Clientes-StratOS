@@ -10,7 +10,10 @@ import type { FollowUpAction, HealthAnalysisResponse } from "@/types/ai";
 
 const RATE_LIMIT_DELAY = 500;
 
-export async function runFollowUpForClient(client: Client): Promise<{
+export async function runFollowUpForClient(
+  client: Client,
+  triggeredBy: "cron" | "manual" | "user" = "cron"
+): Promise<{
   actionsExecuted: number;
   errors: string[];
 }> {
@@ -83,7 +86,7 @@ export async function runFollowUpForClient(client: Client): Promise<{
     const prompt = buildFollowUpPrompt(promptContext);
 
     // Call Gemini
-    const actions = await generateJson<FollowUpAction[]>(prompt, []);
+    const actions = await generateJson<FollowUpAction[]>(prompt);
 
     // Execute actions
     for (const action of actions) {
@@ -93,7 +96,7 @@ export async function runFollowUpForClient(client: Client): Promise<{
           await supabase.from("ai_audit_log").insert({
             client_id: client.id,
             action_type: "follow_up_comment",
-            triggered_by: "cron",
+            triggered_by: triggeredBy,
             prompt_summary: prompt.slice(0, 500),
             ai_response_summary: JSON.stringify(actions).slice(0, 500),
             asana_task_id: action.taskGid,
@@ -107,7 +110,7 @@ export async function runFollowUpForClient(client: Client): Promise<{
           await supabase.from("ai_audit_log").insert({
             client_id: client.id,
             action_type: "task_moved",
-            triggered_by: "cron",
+            triggered_by: triggeredBy,
             prompt_summary: prompt.slice(0, 500),
             ai_response_summary: JSON.stringify(actions).slice(0, 500),
             asana_task_id: action.taskGid,
@@ -123,7 +126,7 @@ export async function runFollowUpForClient(client: Client): Promise<{
         await supabase.from("ai_audit_log").insert({
           client_id: client.id,
           action_type: action.type === "comment" ? "follow_up_comment" : "task_moved",
-          triggered_by: "cron",
+          triggered_by: triggeredBy,
           asana_task_id: "taskGid" in action ? action.taskGid : null,
           success: false,
           error_message: msg,
@@ -136,7 +139,7 @@ export async function runFollowUpForClient(client: Client): Promise<{
     await supabase.from("ai_audit_log").insert({
       client_id: client.id,
       action_type: "cron_run_failed",
-      triggered_by: "cron",
+      triggered_by: triggeredBy,
       success: false,
       error_message: msg,
     });
@@ -200,12 +203,7 @@ export async function runHealthAnalysis(client: Client): Promise<void> {
       comments: recentComments,
     });
 
-    const result = await generateJson<HealthAnalysisResponse>(prompt, {
-      score: 50,
-      summary: "Análise indisponível.",
-      risks: [],
-      positives: [],
-    });
+    const result = await generateJson<HealthAnalysisResponse>(prompt);
 
     await supabase
       .from("clients")
@@ -219,7 +217,7 @@ export async function runHealthAnalysis(client: Client): Promise<void> {
     await supabase.from("ai_audit_log").insert({
       client_id: client.id,
       action_type: "health_analysis",
-      triggered_by: "cron",
+      triggered_by: triggeredBy,
       prompt_summary: prompt.slice(0, 500),
       ai_response_summary: JSON.stringify(result).slice(0, 500),
       success: true,
@@ -230,7 +228,7 @@ export async function runHealthAnalysis(client: Client): Promise<void> {
     await supabase.from("ai_audit_log").insert({
       client_id: client.id,
       action_type: "health_analysis",
-      triggered_by: "cron",
+      triggered_by: triggeredBy,
       success: false,
       error_message: msg,
     });

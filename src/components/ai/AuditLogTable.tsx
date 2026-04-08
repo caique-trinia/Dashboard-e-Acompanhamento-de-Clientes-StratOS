@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { formatDateTime } from "@/lib/utils";
@@ -65,8 +65,8 @@ export function AuditLogTable({ clientId }: { clientId?: string }) {
         </thead>
         <tbody className="divide-y">
           {logs.map((log) => (
-            <>
-              <tr key={log.id} className="hover:bg-slate-50">
+            <Fragment key={log.id}>
+              <tr className="hover:bg-slate-50">
                 <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
                   {formatDateTime(log.created_at)}
                 </td>
@@ -105,7 +105,7 @@ export function AuditLogTable({ clientId }: { clientId?: string }) {
                 </td>
               </tr>
               {expandedId === log.id && log.asana_action && (
-                <tr key={`${log.id}-expanded`} className="bg-slate-50">
+                <tr className="bg-slate-50">
                   <td colSpan={clientId ? 5 : 6} className="px-4 py-2">
                     <pre className="text-xs bg-white border rounded p-2 overflow-auto max-h-40">
                       {JSON.stringify(log.asana_action, null, 2)}
@@ -113,7 +113,7 @@ export function AuditLogTable({ clientId }: { clientId?: string }) {
                   </td>
                 </tr>
               )}
-            </>
+            </Fragment>
           ))}
           {logs.length === 0 && (
             <tr>

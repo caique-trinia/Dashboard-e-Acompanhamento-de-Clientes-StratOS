@@ -20,17 +20,13 @@ export function getFlashModel() {
   });
 }
 
-export async function generateJson<T>(
-  prompt: string,
-  fallback: T
-): Promise<T> {
+export async function generateJson<T>(prompt: string): Promise<T> {
   const model = getFlashModel();
+  const result = await model.generateContent(prompt);
+  const text = result.response.text();
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
     return JSON.parse(text) as T;
-  } catch (err) {
-    console.error("[Gemini] Erro ao gerar ou parsear JSON:", err);
-    return fallback;
+  } catch {
+    throw new Error(`Gemini retornou JSON inválido: ${text.slice(0, 300)}`);
   }
 }

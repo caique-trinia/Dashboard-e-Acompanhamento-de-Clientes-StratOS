@@ -20,6 +20,6 @@ export async function POST(req: NextRequest) {
   if (!client) return NextResponse.json({ error: "Cliente não encontrado" }, { status: 404 });
 
   // Override triggered_by to "manual" for this run by calling the lib directly
-  const result = await runFollowUpForClient(client);
+  const result = await runFollowUpForClient(client, "manual");
   return NextResponse.json(result);
 }
