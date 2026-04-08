@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { readSettings } from "@/lib/settings";
 
 let _client: GoogleGenerativeAI | null = null;
 
@@ -12,8 +13,9 @@ function getGeminiClient(): GoogleGenerativeAI {
 }
 
 export function getFlashModel() {
+  const { geminiModel } = readSettings();
   return getGeminiClient().getGenerativeModel({
-    model: "gemini-2.5-flash",
+    model: geminiModel,
     generationConfig: {
       responseMimeType: "application/json",
     },
@@ -30,3 +32,4 @@ export async function generateJson<T>(prompt: string): Promise<T> {
     throw new Error(`Gemini retornou JSON inválido: ${text.slice(0, 300)}`);
   }
 }
+
