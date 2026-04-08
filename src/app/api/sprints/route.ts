@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
-  const { client_id, name, start_date, end_date, meeting_context, asana_section_id } = body;
+  const { client_id, name, goal, start_date, end_date, meeting_context, asana_section_id } = body;
 
   if (!client_id || !name) {
     return NextResponse.json({ error: "client_id e name são obrigatórios" }, { status: 400 });
@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
     .insert({
       client_id,
       name,
+      goal: goal ?? null,
       start_date: start_date ?? null,
       end_date: end_date ?? null,
       meeting_context: meeting_context ?? null,

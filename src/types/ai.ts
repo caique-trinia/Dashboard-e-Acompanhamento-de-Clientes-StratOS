@@ -50,6 +50,18 @@ export interface FollowUpContext {
   }[];
   meetingContext: string | null;
   sections: { gid: string; name: string }[];
+  activeSprint: {
+    id: string;
+    name: string;
+    goal: string | null;
+    start_date: string | null;
+    end_date: string | null;
+  } | null;
+  openActionItems: {
+    description: string;
+    assignee: string | null;
+    due_date: string | null;
+  }[];
 }
 
 export interface HealthContext {

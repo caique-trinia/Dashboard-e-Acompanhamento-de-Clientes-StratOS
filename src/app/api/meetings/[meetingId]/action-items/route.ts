@@ -1,45 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export async function GET(req: NextRequest) {
+export async function GET(
+  _req: NextRequest,
+  { params }: { params: Promise<{ meetingId: string }> }
+) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const clientId = req.nextUrl.searchParams.get("clientId");
-  if (!clientId) return NextResponse.json({ error: "clientId obrigatório" }, { status: 400 });
-
+  const { meetingId } = await params;
   const { data, error } = await supabase
-    .from("meeting_notes")
+    .from("meeting_action_items")
     .select("*")
-    .eq("client_id", clientId)
-    .order("created_at", { ascending: false });
+    .eq("meeting_id", meetingId)
+    .order("created_at");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ meetingId: string }> }
+) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
+  const { meetingId } = await params;
   const body = await req.json();
-  const { client_id, sprint_id, title, content, meeting_type } = body;
+  const { description, assignee, due_date } = body;
 
-  if (!client_id || !title || !content) {
-    return NextResponse.json({ error: "client_id, title e content são obrigatórios" }, { status: 400 });
+  if (!description) {
+    return NextResponse.json({ error: "description é obrigatório" }, { status: 400 });
   }
 
   const { data, error } = await supabase
-    .from("meeting_notes")
+    .from("meeting_action_items")
     .insert({
-      client_id,
-      sprint_id: sprint_id ?? null,
-      title,
-      content,
-      meeting_type: meeting_type ?? null,
-      uploaded_by: user.id,
+      meeting_id: meetingId,
+      description,
+      assignee: assignee ?? null,
+      due_date: due_date ?? null,
     })
     .select()
     .single();

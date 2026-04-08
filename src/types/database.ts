@@ -60,6 +60,7 @@ export interface Sprint {
   created_at: string;
   client_id: string;
   name: string;
+  goal: string | null;
   start_date: string | null;
   end_date: string | null;
   status: SprintStatus;
@@ -88,7 +89,18 @@ export interface MeetingNote {
   sprint_id: string | null;
   title: string;
   content: string;
+  meeting_type: string | null;
   uploaded_by: string | null;
+}
+
+export interface MeetingActionItem {
+  id: string;
+  created_at: string;
+  meeting_id: string;
+  description: string;
+  assignee: string | null;
+  due_date: string | null;
+  done: boolean;
 }
 
 export interface AiAuditLog {

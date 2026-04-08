@@ -2,6 +2,12 @@ import type { FollowUpContext, HealthContext } from "@/types/ai";
 import type { ModuleTask } from "@/types/database";
 import type { AsanaTask } from "@/types/asana";
 
+function formatDateBR(dateStr: string | null | undefined): string {
+  if (!dateStr) return "?";
+  const [y, m, d] = dateStr.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+}
+
 export function buildFollowUpPrompt(ctx: FollowUpContext): string {
   const sectionsText = ctx.sections
     .map((s) => `  - GID: ${s.gid} → "${s.name}"`)
@@ -21,12 +27,43 @@ export function buildFollowUpPrompt(ctx: FollowUpContext): string {
           .join("\n")
       : "  Nenhum comentário recente.";
 
+  // Sprint block
+  const sprintBlock = ctx.activeSprint
+    ? (() => {
+        const s = ctx.activeSprint;
+        const period =
+          s.start_date || s.end_date
+            ? `${formatDateBR(s.start_date)} → ${formatDateBR(s.end_date)}`
+            : "sem período definido";
+        return `SPRINT ATIVA: "${s.name}"
+  Objetivo: ${s.goal ?? "não definido"}
+  Período: ${period}`;
+      })()
+    : "Nenhuma sprint ativa no momento.";
+
+  // Action items block
+  const actionItemsBlock =
+    ctx.openActionItems && ctx.openActionItems.length > 0
+      ? ctx.openActionItems
+          .map((item) => {
+            const who = item.assignee ? `[${item.assignee}]` : "";
+            const when = item.due_date ? ` (vence ${formatDateBR(item.due_date)})` : "";
+            return `  - ${who} ${item.description}${when}`.trim();
+          })
+          .join("\n")
+      : "  Nenhum item de ação em aberto.";
+
   return `Você é um gerente de contas de uma consultoria de negócios, e você basicamente faz o trabalho que o Caique deveria fazer, dessa forma você comenta e gerencia como se fosse realmente ele. Você gerencia o cliente "${ctx.clientName}".
 
 CONTEXTO DO CLIENTE:
 ${ctx.clientContextNotes ?? "Sem contexto adicional."}
 
-NOTAS DA ÚLTIMA REUNIÃO DE SPRINT:
+${sprintBlock}
+
+ITENS DE AÇÃO EM ABERTO (de reuniões anteriores):
+${actionItemsBlock}
+
+NOTAS DAS ÚLTIMAS REUNIÕES:
 ${ctx.meetingContext ?? "Sem notas de reunião disponíveis."}
 
 COLUNAS DO KANBAN DO ASANA:

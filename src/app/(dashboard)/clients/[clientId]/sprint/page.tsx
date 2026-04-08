@@ -10,8 +10,28 @@ import { Badge } from "@/components/ui/badge";
 import { ModuleTree } from "@/components/modules/ModuleTree";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2, Plus, Send, Bot } from "lucide-react";
+import { Loader2, Plus, Send, Bot, Play, CheckSquare, Calendar, Target } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 import type { Sprint, SprintTask, ModuleTask, ModuleLibrary } from "@/types/database";
+
+const STATUS_LABELS: Record<string, string> = {
+  planning: "Planejamento",
+  active: "Ativa",
+  completed: "Concluída",
+};
+
+const STATUS_VARIANTS: Record<string, "outline" | "info" | "success" | "warning"> = {
+  planning: "outline",
+  active: "success",
+  completed: "info",
+};
+
+const TASK_STATUS_VARIANTS: Record<string, "outline" | "info" | "warning" | "success"> = {
+  pending: "outline",
+  pushed: "info",
+  in_progress: "warning",
+  completed: "success",
+};
 
 export default function SprintPage({
   params,
@@ -29,11 +49,17 @@ export default function SprintPage({
   const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [showNewSprint, setShowNewSprint] = useState(false);
-  const [newSprintName, setNewSprintName] = useState("");
+  const [newSprint, setNewSprint] = useState({
+    name: "",
+    goal: "",
+    start_date: "",
+    end_date: "",
+  });
 
   useEffect(() => {
     fetchSprints();
     fetchLibraries();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clientId]);
 
   useEffect(() => {
@@ -46,8 +72,9 @@ export default function SprintPage({
     if (Array.isArray(data)) {
       setSprints(data);
       const active = data.find((s: Sprint) => s.status === "active");
-      setActiveSprint(active ?? data[0] ?? null);
-      if (active ?? data[0]) fetchSprintTasks((active ?? data[0]).id);
+      const selected = active ?? data[0] ?? null;
+      setActiveSprint(selected);
+      if (selected) fetchSprintTasks(selected.id);
     }
   }
 
@@ -77,12 +104,18 @@ export default function SprintPage({
   }
 
   async function createSprint() {
-    if (!newSprintName.trim()) return;
+    if (!newSprint.name.trim()) return;
     setLoading(true);
     const res = await fetch("/api/sprints", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, name: newSprintName, status: "active" }),
+      body: JSON.stringify({
+        client_id: clientId,
+        name: newSprint.name,
+        goal: newSprint.goal || null,
+        start_date: newSprint.start_date || null,
+        end_date: newSprint.end_date || null,
+      }),
     });
     const data = await res.json();
     setLoading(false);
@@ -91,9 +124,27 @@ export default function SprintPage({
     } else {
       toast({ title: "Sprint criada!" });
       setShowNewSprint(false);
-      setNewSprintName("");
+      setNewSprint({ name: "", goal: "", start_date: "", end_date: "" });
       fetchSprints();
     }
+  }
+
+  async function updateSprintStatus(sprintId: string, status: "active" | "completed") {
+    const res = await fetch(`/api/sprints/${sprintId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    if (res.ok) {
+      toast({ title: status === "active" ? "Sprint iniciada!" : "Sprint concluída!" });
+      fetchSprints();
+    }
+  }
+
+  async function selectSprint(sprint: Sprint) {
+    setActiveSprint(sprint);
+    setSelectedTaskIds(new Set());
+    fetchSprintTasks(sprint.id);
   }
 
   async function addSelectedTasksToSprint() {
@@ -155,45 +206,117 @@ export default function SprintPage({
     }
   }
 
-  const statusColors: Record<string, "outline" | "info" | "warning" | "success"> = {
-    pending: "outline",
-    pushed: "info",
-    in_progress: "warning",
-    completed: "success",
-  };
-
   return (
     <div>
       <Topbar title="Gerenciar Sprint" subtitle="Selecione tarefas do módulo e empurre para o Asana" />
       <div className="p-6 space-y-6">
-        {/* Sprint selector */}
+
+        {/* Sprint list + creation */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Sprint Ativa</CardTitle>
+            <CardTitle className="text-sm font-medium">Sprints</CardTitle>
             <Button variant="outline" size="sm" onClick={() => setShowNewSprint(!showNewSprint)}>
               <Plus className="h-4 w-4 mr-1" /> Nova Sprint
             </Button>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
             {showNewSprint && (
-              <div className="flex gap-2 mb-4">
-                <Input
-                  value={newSprintName}
-                  onChange={(e) => setNewSprintName(e.target.value)}
-                  placeholder="Nome da sprint, ex: Sprint 1 - Abril 2026"
-                  onKeyDown={(e) => e.key === "Enter" && createSprint()}
-                />
-                <Button onClick={createSprint} disabled={loading}>Criar</Button>
+              <div className="border rounded-md p-4 space-y-3 bg-slate-50">
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="space-y-1">
+                    <Label>Nome da Sprint *</Label>
+                    <Input
+                      value={newSprint.name}
+                      onChange={(e) => setNewSprint((f) => ({ ...f, name: e.target.value }))}
+                      placeholder="Ex: Sprint 1 – Abril 2026"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Objetivo</Label>
+                    <Input
+                      value={newSprint.goal}
+                      onChange={(e) => setNewSprint((f) => ({ ...f, goal: e.target.value }))}
+                      placeholder="Ex: Estruturar funil de vendas e qualificar leads"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label>Início</Label>
+                      <Input
+                        type="date"
+                        value={newSprint.start_date}
+                        onChange={(e) => setNewSprint((f) => ({ ...f, start_date: e.target.value }))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Fim</Label>
+                      <Input
+                        type="date"
+                        value={newSprint.end_date}
+                        onChange={(e) => setNewSprint((f) => ({ ...f, end_date: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={createSprint} disabled={loading || !newSprint.name.trim()}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Criar Sprint
+                  </Button>
+                  <Button variant="outline" onClick={() => setShowNewSprint(false)}>Cancelar</Button>
+                </div>
               </div>
             )}
-            {activeSprint ? (
-              <div className="flex items-center gap-3">
-                <Badge variant="success">Ativa</Badge>
-                <span className="font-medium">{activeSprint.name}</span>
-              </div>
-            ) : (
-              <p className="text-sm text-slate-400">Nenhuma sprint ativa. Crie uma acima.</p>
+
+            {sprints.length === 0 && !showNewSprint && (
+              <p className="text-sm text-slate-400">Nenhuma sprint criada. Clique em Nova Sprint.</p>
             )}
+
+            <div className="space-y-2">
+              {sprints.map((sprint) => (
+                <div
+                  key={sprint.id}
+                  className={`flex items-start gap-3 p-3 rounded-md border cursor-pointer transition-colors ${
+                    activeSprint?.id === sprint.id
+                      ? "border-primary bg-primary/5"
+                      : "hover:bg-slate-50"
+                  }`}
+                  onClick={() => selectSprint(sprint)}
+                >
+                  <Badge variant={STATUS_VARIANTS[sprint.status] ?? "outline"} className="mt-0.5 flex-shrink-0">
+                    {STATUS_LABELS[sprint.status]}
+                  </Badge>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{sprint.name}</p>
+                    {sprint.goal && (
+                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                        <Target className="h-3 w-3" /> {sprint.goal}
+                      </p>
+                    )}
+                    {(sprint.start_date || sprint.end_date) && (
+                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+                        <Calendar className="h-3 w-3" />
+                        {sprint.start_date ? formatDate(sprint.start_date) : "?"} → {sprint.end_date ? formatDate(sprint.end_date) : "?"}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {sprint.status === "planning" && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs"
+                        onClick={() => updateSprintStatus(sprint.id, "active")}>
+                        <Play className="h-3 w-3 mr-1" /> Iniciar
+                      </Button>
+                    )}
+                    {sprint.status === "active" && (
+                      <Button size="sm" variant="outline" className="h-7 text-xs"
+                        onClick={() => updateSprintStatus(sprint.id, "completed")}>
+                        <CheckSquare className="h-3 w-3 mr-1" /> Concluir
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
 
@@ -222,9 +345,10 @@ export default function SprintPage({
                         onClick={() => setSelectedLibrary(lib.id)}
                         className={`text-xs px-2 py-1 rounded-full border transition-colors ${
                           selectedLibrary === lib.id
-                            ? "bg-blue-600 text-white border-blue-600"
+                            ? "text-white border-primary"
                             : "bg-white text-slate-600 hover:bg-slate-50"
                         }`}
+                        style={selectedLibrary === lib.id ? { backgroundColor: "var(--color-primary)" } : undefined}
                       >
                         {lib.name}
                       </button>
@@ -268,7 +392,7 @@ export default function SprintPage({
                   <div className="space-y-2 max-h-[400px] overflow-auto">
                     {sprintTasks.map((task) => (
                       <div key={task.id} className="flex items-center gap-2 py-1.5 border-b last:border-0">
-                        <Badge variant={statusColors[task.status] ?? "outline"} className="text-xs flex-shrink-0">
+                        <Badge variant={TASK_STATUS_VARIANTS[task.status] ?? "outline"} className="text-xs flex-shrink-0">
                           {task.status}
                         </Badge>
                         <span className="text-sm flex-1 truncate">{task.name}</span>

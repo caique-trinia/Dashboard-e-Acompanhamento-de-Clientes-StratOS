@@ -56,15 +56,56 @@ export async function runFollowUpForClient(
       }
     }
 
-    // Fetch most recent meeting notes
+    // Fetch last 3 meeting notes
     const { data: meetingNotes } = await supabase
       .from("meeting_notes")
-      .select("content")
+      .select("title, content, meeting_type, created_at")
       .eq("client_id", client.id)
       .order("created_at", { ascending: false })
+      .limit(3);
+
+    const meetingContext = meetingNotes && meetingNotes.length > 0
+      ? meetingNotes
+          .map((m, i) => {
+            const label = i === 0 ? "ÚLTIMA REUNIÃO" : `REUNIÃO ANTERIOR ${i}`;
+            const type = m.meeting_type ? ` (${m.meeting_type})` : "";
+            const date = m.created_at.slice(0, 10);
+            return `${label}${type} – ${date}:\n${m.content}`;
+          })
+          .join("\n\n---\n\n")
+      : null;
+
+    // Fetch active sprint metadata
+    const { data: activeSprints } = await supabase
+      .from("sprints")
+      .select("id, name, goal, start_date, end_date, status")
+      .eq("client_id", client.id)
+      .eq("status", "active")
       .limit(1);
 
-    const meetingContext = meetingNotes?.[0]?.content ?? null;
+    const activeSprint = activeSprints?.[0] ?? null;
+
+    // Fetch open action items from last 3 meetings
+    let openActionItems: { description: string; assignee: string | null; due_date: string | null }[] = [];
+    if (meetingNotes && meetingNotes.length > 0) {
+      const { data: meetingIds } = await supabase
+        .from("meeting_notes")
+        .select("id")
+        .eq("client_id", client.id)
+        .order("created_at", { ascending: false })
+        .limit(3);
+
+      if (meetingIds && meetingIds.length > 0) {
+        const ids = meetingIds.map((m) => m.id);
+        const { data: items } = await supabase
+          .from("meeting_action_items")
+          .select("description, assignee, due_date")
+          .in("meeting_id", ids)
+          .eq("done", false)
+          .order("created_at");
+        openActionItems = items ?? [];
+      }
+    }
 
     // Build prompt context
     const promptContext = {
@@ -81,6 +122,8 @@ export async function runFollowUpForClient(
       recentComments: allComments.slice(0, 20),
       meetingContext,
       sections,
+      activeSprint,
+      openActionItems,
     };
 
     const prompt = buildFollowUpPrompt(promptContext);
