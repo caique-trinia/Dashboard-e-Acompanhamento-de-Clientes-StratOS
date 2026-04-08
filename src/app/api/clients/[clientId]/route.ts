@@ -30,7 +30,7 @@ export async function PATCH(
 
   const { clientId } = await params;
   const body = await req.json();
-  const allowedFields = ["name", "context_notes", "asana_project_id", "asana_project_name", "is_active"];
+  const allowedFields = ["name", "context_notes", "asana_project_id", "asana_project_name", "asana_workspace_id", "is_active"];
   const updates: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (field in body) updates[field] = body[field];

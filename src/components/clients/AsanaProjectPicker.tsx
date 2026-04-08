@@ -9,16 +9,25 @@ import type { AsanaProject } from "@/types/asana";
 
 interface AsanaProjectPickerProps {
   value?: string;
+  workspaceId?: string;
   onSelect: (gid: string, name: string) => void;
 }
 
-export function AsanaProjectPicker({ value, onSelect }: AsanaProjectPickerProps) {
+export function AsanaProjectPicker({ value, workspaceId, onSelect }: AsanaProjectPickerProps) {
   const [projects, setProjects] = useState<AsanaProject[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/asana/projects")
+    setLoading(true);
+    setError(null);
+    setProjects([]);
+
+    const url = workspaceId
+      ? `/api/asana/projects?workspaceId=${workspaceId}`
+      : "/api/asana/projects";
+
+    fetch(url)
       .then((r) => r.json())
       .then((data) => {
         if (Array.isArray(data)) setProjects(data);
@@ -26,7 +35,7 @@ export function AsanaProjectPicker({ value, onSelect }: AsanaProjectPickerProps)
       })
       .catch(() => setError("Falha ao conectar com a API"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [workspaceId]);
 
   if (loading) {
     return (

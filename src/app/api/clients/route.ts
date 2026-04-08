@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const body = await req.json();
-  const { name, context_notes, asana_project_id, asana_project_name } = body;
+  const { name, context_notes, asana_project_id, asana_project_name, asana_workspace_id } = body;
 
   if (!name || !asana_project_id) {
     return NextResponse.json({ error: "name e asana_project_id são obrigatórios" }, { status: 400 });
@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
       context_notes: context_notes ?? null,
       asana_project_id,
       asana_project_name: asana_project_name ?? null,
+      asana_workspace_id: asana_workspace_id ?? null,
       created_by: user.id,
     })
     .select()

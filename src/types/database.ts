@@ -23,6 +23,7 @@ export interface Client {
   context_notes: string | null;
   asana_project_id: string;
   asana_project_name: string | null;
+  asana_workspace_id: string | null;
   health_score: number | null;
   health_summary: string | null;
   health_updated_at: string | null;

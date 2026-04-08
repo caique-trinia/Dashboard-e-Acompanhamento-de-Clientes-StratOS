@@ -1,17 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { getProjects } from "@/lib/asana/projects";
+import { asanaFetch } from "@/lib/asana/client";
+import type { AsanaWorkspace } from "@/types/asana";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
-  const workspaceId = req.nextUrl.searchParams.get("workspaceId") ?? undefined;
-
   try {
-    const projects = await getProjects(workspaceId);
-    return NextResponse.json(projects);
+    const workspaces = await asanaFetch<AsanaWorkspace[]>("/workspaces?opt_fields=gid,name");
+    return NextResponse.json(workspaces);
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AsanaWorkspacePicker } from "@/components/clients/AsanaWorkspacePicker";
 import { AsanaProjectPicker } from "@/components/clients/AsanaProjectPicker";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
@@ -19,9 +20,21 @@ export default function NewClientPage() {
   const [form, setForm] = useState({
     name: "",
     context_notes: "",
+    asana_workspace_id: "",
+    asana_workspace_name: "",
     asana_project_id: "",
     asana_project_name: "",
   });
+
+  function handleWorkspaceSelect(gid: string, name: string) {
+    setForm((f) => ({
+      ...f,
+      asana_workspace_id: gid,
+      asana_workspace_name: name,
+      asana_project_id: "",
+      asana_project_name: "",
+    }));
+  }
 
   function handleProjectSelect(gid: string, name: string) {
     setForm((f) => ({ ...f, asana_project_id: gid, asana_project_name: name }));
@@ -38,7 +51,13 @@ export default function NewClientPage() {
     const res = await fetch("/api/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        name: form.name,
+        context_notes: form.context_notes,
+        asana_workspace_id: form.asana_workspace_id || null,
+        asana_project_id: form.asana_project_id,
+        asana_project_name: form.asana_project_name,
+      }),
     });
 
     const data = await res.json();
@@ -75,9 +94,21 @@ export default function NewClientPage() {
               </div>
 
               <div className="space-y-2">
+                <Label>Workspace Asana</Label>
+                <AsanaWorkspacePicker
+                  value={form.asana_workspace_id}
+                  onSelect={handleWorkspaceSelect}
+                />
+                <p className="text-xs text-slate-500">
+                  Deixe no workspace padrão ou selecione um diferente para este cliente.
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Projeto Asana *</Label>
                 <AsanaProjectPicker
                   value={form.asana_project_id}
+                  workspaceId={form.asana_workspace_id || undefined}
                   onSelect={handleProjectSelect}
                 />
                 {form.asana_project_name && (
