@@ -217,7 +217,7 @@ export async function runHealthAnalysis(client: Client): Promise<void> {
     await supabase.from("ai_audit_log").insert({
       client_id: client.id,
       action_type: "health_analysis",
-      triggered_by: triggeredBy,
+      triggered_by: "cron",
       prompt_summary: prompt.slice(0, 500),
       ai_response_summary: JSON.stringify(result).slice(0, 500),
       success: true,
@@ -228,7 +228,7 @@ export async function runHealthAnalysis(client: Client): Promise<void> {
     await supabase.from("ai_audit_log").insert({
       client_id: client.id,
       action_type: "health_analysis",
-      triggered_by: triggeredBy,
+      triggered_by: "cron",
       success: false,
       error_message: msg,
     });
