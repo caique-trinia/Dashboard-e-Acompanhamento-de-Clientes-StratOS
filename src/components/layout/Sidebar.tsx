@@ -34,9 +34,9 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-64 min-h-screen bg-slate-900 text-white">
-      <div className="flex items-center gap-2 px-6 py-5 border-b border-slate-700">
-        <Zap className="h-6 w-6 text-blue-400" />
+    <aside className="flex flex-col w-64 min-h-screen text-white" style={{ backgroundColor: "#0a0b69" }}>
+      <div className="flex items-center gap-2 px-6 py-5 border-b" style={{ borderColor: "#1c1e8a" }}>
+        <Zap className="h-6 w-6" style={{ color: "#f92e78" }} />
         <span className="text-lg font-bold tracking-tight">StratOS</span>
       </div>
 
@@ -50,9 +50,10 @@ export function Sidebar() {
               className={cn(
                 "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                  ? "text-white"
+                  : "text-blue-200 hover:text-white"
               )}
+              style={isActive ? { backgroundColor: "#f92e78" } : undefined}
             >
               <Icon className="h-4 w-4" />
               {label}
@@ -64,7 +65,9 @@ export function Sidebar() {
       <div className="px-3 pb-4">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium text-blue-200 hover:text-white transition-colors"
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#1c1e8a")}
+          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
         >
           <LogOut className="h-4 w-4" />
           Sair
