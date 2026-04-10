@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { readSettings, getModelProvider, getModelId } from "@/lib/settings";
+import { sleep } from "@/lib/utils";
 
 // ── Gemini ────────────────────────────────────────────────────────────────────
 
@@ -14,18 +15,47 @@ function getGeminiClient(): GoogleGenerativeAI {
   return _geminiClient;
 }
 
+/** Returns true for errors that are worth retrying (rate limit, overload) */
+function isRetryable(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("429") ||
+    msg.includes("503") ||
+    msg.includes("Too Many Requests") ||
+    msg.includes("Service Unavailable") ||
+    msg.includes("overloaded")
+  );
+}
+
 async function generateWithGemini<T>(modelId: string, prompt: string): Promise<T> {
   const model = getGeminiClient().getGenerativeModel({
     model: modelId,
     generationConfig: { responseMimeType: "application/json" },
   });
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    throw new Error(`Gemini retornou JSON inválido: ${text.slice(0, 300)}`);
+
+  const delays = [2000, 4000, 8000]; // 3 retries with backoff
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      const result = await model.generateContent(prompt);
+      const text = result.response.text();
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        throw new Error(`Gemini retornou JSON inválido: ${text.slice(0, 300)}`);
+      }
+    } catch (err) {
+      lastError = err;
+      if (attempt < delays.length && isRetryable(err)) {
+        await sleep(delays[attempt]);
+        continue;
+      }
+      throw err;
+    }
   }
+
+  throw lastError;
 }
 
 // ── Groq ──────────────────────────────────────────────────────────────────────
