@@ -27,24 +27,52 @@ function isRetryable(err: unknown): boolean {
   );
 }
 
-async function generateWithGemini<T>(modelId: string, prompt: string): Promise<T> {
-  const model = getGeminiClient().getGenerativeModel({
-    model: modelId,
-    generationConfig: { responseMimeType: "application/json" },
-  });
+/**
+ * Extract JSON from a model response that may include markdown code fences.
+ * Supports: raw JSON, ```json ... ```, ``` ... ```
+ */
+function extractJson<T>(text: string): T {
+  // Try direct parse first
+  const trimmed = text.trim();
+  try {
+    return JSON.parse(trimmed) as T;
+  } catch {
+    // Strip markdown code fences
+    const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fenceMatch) {
+      try {
+        return JSON.parse(fenceMatch[1].trim()) as T;
+      } catch {
+        // fall through
+      }
+    }
+    // Last resort: find first [ or { and last ] or }
+    const start = trimmed.search(/[\[{]/);
+    const lastBracket = Math.max(trimmed.lastIndexOf("]"), trimmed.lastIndexOf("}"));
+    if (start !== -1 && lastBracket > start) {
+      try {
+        return JSON.parse(trimmed.slice(start, lastBracket + 1)) as T;
+      } catch {
+        // fall through
+      }
+    }
+    throw new Error(`JSON inválido na resposta do modelo: ${trimmed.slice(0, 300)}`);
+  }
+}
 
-  const delays = [2000, 4000, 8000]; // 3 retries with backoff
+async function generateWithGemini<T>(modelId: string, prompt: string): Promise<T> {
+  // NOTE: responseMimeType:"application/json" is NOT supported by all Gemini models.
+  // We rely on the prompt explicitly requesting JSON and extract it from the text.
+  const model = getGeminiClient().getGenerativeModel({ model: modelId });
+
+  const delays = [2000, 4000, 8000]; // 3 retries with exponential backoff
   let lastError: unknown;
 
   for (let attempt = 0; attempt <= delays.length; attempt++) {
     try {
       const result = await model.generateContent(prompt);
       const text = result.response.text();
-      try {
-        return JSON.parse(text) as T;
-      } catch {
-        throw new Error(`Gemini retornou JSON inválido: ${text.slice(0, 300)}`);
-      }
+      return extractJson<T>(text);
     } catch (err) {
       lastError = err;
       if (attempt < delays.length && isRetryable(err)) {

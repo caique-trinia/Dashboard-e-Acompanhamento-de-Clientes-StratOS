@@ -48,6 +48,7 @@ export const AVAILABLE_MODELS: AvailableModel[] = [
   { value: "gemini-2.5-flash",      label: "Gemini 2.5 Flash",          description: "Padrão — rápido e equilibrado",          provider: "gemini", requiresKey: "GEMINI_API_KEY" },
   { value: "gemini-2.5-pro",        label: "Gemini 2.5 Pro",            description: "Mais capaz, respostas mais elaboradas",  provider: "gemini", requiresKey: "GEMINI_API_KEY" },
   { value: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite",     description: "Ultra-leve e rápido — menor custo",      provider: "gemini", requiresKey: "GEMINI_API_KEY" },
+  { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite",     description: "Mais novo — ultra-leve geração 3.1",     provider: "gemini", requiresKey: "GEMINI_API_KEY" },
   { value: "gemini-2.0-flash",      label: "Gemini 2.0 Flash",          description: "Muito rápido, menor custo",              provider: "gemini", requiresKey: "GEMINI_API_KEY" },
   { value: "gemini-1.5-flash",      label: "Gemini 1.5 Flash",          description: "Versão estável anterior",                provider: "gemini", requiresKey: "GEMINI_API_KEY" },
   { value: "gemini-1.5-pro",        label: "Gemini 1.5 Pro",            description: "Versão pro estável anterior",            provider: "gemini", requiresKey: "GEMINI_API_KEY" },
