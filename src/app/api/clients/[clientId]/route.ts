@@ -46,3 +46,17 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }
+
+export async function DELETE(
+  _req: NextRequest,
+  { params }: { params: Promise<{ clientId: string }> }
+) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const { clientId } = await params;
+  const { error } = await supabase.from("clients").delete().eq("id", clientId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return new NextResponse(null, { status: 204 });
+}

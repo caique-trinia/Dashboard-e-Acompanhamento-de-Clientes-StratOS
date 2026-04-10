@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { ModuleTree } from "@/components/modules/ModuleTree";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2, Plus, Send, Bot, Play, CheckSquare, Calendar, Target } from "lucide-react";
+import { Loader2, Plus, Send, Bot, Play, CheckSquare, Calendar, Target, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { Sprint, SprintTask, ModuleTask, ModuleLibrary } from "@/types/database";
 
@@ -126,6 +126,31 @@ export default function SprintPage({
       setShowNewSprint(false);
       setNewSprint({ name: "", goal: "", start_date: "", end_date: "" });
       fetchSprints();
+    }
+  }
+
+  async function deleteSprint(sprint: Sprint) {
+    if (!window.confirm(`Excluir a sprint "${sprint.name}"? Todas as tarefas vinculadas serão removidas.`)) return;
+    const res = await fetch(`/api/sprints/${sprint.id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast({ title: "Sprint excluída." });
+      setSprints((prev) => prev.filter((s) => s.id !== sprint.id));
+      if (activeSprint?.id === sprint.id) {
+        setActiveSprint(null);
+        setSprintTasks([]);
+      }
+    } else {
+      toast({ title: "Erro ao excluir sprint", variant: "destructive" });
+    }
+  }
+
+  async function deleteSprintTask(taskId: string) {
+    if (!activeSprint) return;
+    const res = await fetch(`/api/sprints/${activeSprint.id}/tasks/${taskId}`, { method: "DELETE" });
+    if (res.ok) {
+      setSprintTasks((prev) => prev.filter((t) => t.id !== taskId));
+    } else {
+      toast({ title: "Erro ao remover tarefa", variant: "destructive" });
     }
   }
 
@@ -313,6 +338,13 @@ export default function SprintPage({
                         <CheckSquare className="h-3 w-3 mr-1" /> Concluir
                       </Button>
                     )}
+                    <button
+                      onClick={() => deleteSprint(sprint)}
+                      className="h-7 px-1.5 rounded border border-transparent text-slate-300 hover:text-red-500 hover:border-red-200 transition-colors"
+                      title="Excluir sprint"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -391,7 +423,7 @@ export default function SprintPage({
                 ) : (
                   <div className="space-y-2 max-h-[400px] overflow-auto">
                     {sprintTasks.map((task) => (
-                      <div key={task.id} className="flex items-center gap-2 py-1.5 border-b last:border-0">
+                      <div key={task.id} className="flex items-center gap-2 py-1.5 border-b last:border-0 group">
                         <Badge variant={TASK_STATUS_VARIANTS[task.status] ?? "outline"} className="text-xs flex-shrink-0">
                           {task.status}
                         </Badge>
@@ -399,6 +431,13 @@ export default function SprintPage({
                         {task.asana_task_id && (
                           <span className="text-xs text-slate-400 flex-shrink-0">Asana ✓</span>
                         )}
+                        <button
+                          onClick={() => deleteSprintTask(task.id)}
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all flex-shrink-0"
+                          title="Remover da sprint"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </div>
                     ))}
                   </div>

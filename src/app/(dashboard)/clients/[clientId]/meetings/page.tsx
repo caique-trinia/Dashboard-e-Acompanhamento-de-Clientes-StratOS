@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, FileText, Upload, SquarePen, CheckSquare2, Square, Trash2 } from "lucide-react";
+import { Loader2, Plus, FileText, Upload, SquarePen, CheckSquare2, Square, Trash2, X } from "lucide-react";
 import { formatDateTime, formatDate } from "@/lib/utils";
 import type { MeetingNote, Sprint, MeetingActionItem } from "@/types/database";
 
@@ -125,6 +125,18 @@ export default function MeetingsPage({
       toast({ title: "Arquivo importado com sucesso!" });
       resetForm();
       fetchMeetings();
+    }
+  }
+
+  async function handleDeleteMeeting(meeting: MeetingNote) {
+    if (!window.confirm(`Excluir a ata "${meeting.title}"?`)) return;
+    const res = await fetch(`/api/meetings/${meeting.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setMeetings((prev) => prev.filter((m) => m.id !== meeting.id));
+      if (selected?.id === meeting.id) setSelected(null);
+      toast({ title: "Ata excluída." });
+    } else {
+      toast({ title: "Erro ao excluir ata", variant: "destructive" });
     }
   }
 
@@ -317,14 +329,14 @@ export default function MeetingsPage({
           {/* Meeting list */}
           <div className="space-y-2">
             {meetings.map((m) => (
-              <button
+              <div
                 key={m.id}
-                className={`w-full text-left p-3 rounded-md border transition-colors ${
+                className={`relative group w-full text-left p-3 rounded-md border transition-colors cursor-pointer ${
                   selected?.id === m.id ? "border-primary bg-primary/5" : "bg-white hover:bg-slate-50"
                 }`}
                 onClick={() => setSelected(m)}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 pr-6">
                   <FileText className="h-4 w-4 text-slate-400 flex-shrink-0" />
                   <span className="text-sm font-medium truncate">{m.title}</span>
                 </div>
@@ -336,7 +348,14 @@ export default function MeetingsPage({
                   )}
                   <p className="text-xs text-slate-400">{formatDateTime(m.created_at)}</p>
                 </div>
-              </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteMeeting(m); }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"
+                  title="Excluir ata"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
             {meetings.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-8">Nenhuma reunião registrada.</p>

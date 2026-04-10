@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModuleTree } from "@/components/modules/ModuleTree";
 import { useToast } from "@/hooks/use-toast";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2, Upload, BookOpen } from "lucide-react";
+import { Loader2, Upload, BookOpen, Trash2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { ModuleLibrary, ModuleTask } from "@/types/database";
 
@@ -48,6 +48,18 @@ export default function ModulesPage() {
       .eq("library_id", libraryId)
       .order("sort_order");
     if (data) setTasks(data as ModuleTask[]);
+  }
+
+  async function handleDeleteLibrary(lib: ModuleLibrary) {
+    if (!window.confirm(`Excluir o módulo "${lib.name}" e suas ${lib.task_count} tarefas?`)) return;
+    const res = await fetch(`/api/modules/${lib.id}`, { method: "DELETE" });
+    if (res.ok) {
+      setLibraries((prev) => prev.filter((l) => l.id !== lib.id));
+      if (selectedLib?.id === lib.id) { setSelectedLib(null); setTasks([]); }
+      toast({ title: "Módulo excluído." });
+    } else {
+      toast({ title: "Erro ao excluir módulo", variant: "destructive" });
+    }
   }
 
   async function handleUpload(e: React.FormEvent) {
@@ -133,21 +145,28 @@ export default function ModulesPage() {
           {/* Library list */}
           <div className="space-y-2">
             {libraries.map((lib) => (
-              <button
+              <div
                 key={lib.id}
                 onClick={() => setSelectedLib(lib)}
-                className={`w-full text-left p-3 rounded-md border transition-colors ${
-                  selectedLib?.id === lib.id ? "bg-blue-50 border-blue-300" : "bg-white hover:bg-slate-50"
+                className={`relative group w-full text-left p-3 rounded-md border cursor-pointer transition-colors ${
+                  selectedLib?.id === lib.id ? "border-primary bg-primary/5" : "bg-white hover:bg-slate-50"
                 }`}
               >
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 pr-6">
                   <BookOpen className="h-4 w-4 text-slate-400 flex-shrink-0" />
                   <span className="text-sm font-medium truncate">{lib.name}</span>
                 </div>
                 <p className="text-xs text-slate-400 mt-1 ml-6">
                   {lib.task_count} tarefas · {formatDate(lib.created_at)}
                 </p>
-              </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteLibrary(lib); }}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 transition-all"
+                  title="Excluir módulo"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
             {libraries.length === 0 && (
               <p className="text-sm text-slate-400 text-center py-8">

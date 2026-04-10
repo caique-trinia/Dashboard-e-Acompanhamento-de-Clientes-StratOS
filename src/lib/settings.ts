@@ -45,11 +45,12 @@ export interface AvailableModel {
 
 export const AVAILABLE_MODELS: AvailableModel[] = [
   // Gemini
-  { value: "gemini-2.5-flash",  label: "Gemini 2.5 Flash",        description: "Padrão — rápido e equilibrado",          provider: "gemini", requiresKey: "GEMINI_API_KEY" },
-  { value: "gemini-2.5-pro",    label: "Gemini 2.5 Pro",          description: "Mais capaz, respostas mais elaboradas",  provider: "gemini", requiresKey: "GEMINI_API_KEY" },
-  { value: "gemini-2.0-flash",  label: "Gemini 2.0 Flash",        description: "Muito rápido, menor custo",              provider: "gemini", requiresKey: "GEMINI_API_KEY" },
-  { value: "gemini-1.5-flash",  label: "Gemini 1.5 Flash",        description: "Versão estável anterior",                provider: "gemini", requiresKey: "GEMINI_API_KEY" },
-  { value: "gemini-1.5-pro",    label: "Gemini 1.5 Pro",          description: "Versão pro estável anterior",            provider: "gemini", requiresKey: "GEMINI_API_KEY" },
+  { value: "gemini-2.5-flash",      label: "Gemini 2.5 Flash",          description: "Padrão — rápido e equilibrado",          provider: "gemini", requiresKey: "GEMINI_API_KEY" },
+  { value: "gemini-2.5-pro",        label: "Gemini 2.5 Pro",            description: "Mais capaz, respostas mais elaboradas",  provider: "gemini", requiresKey: "GEMINI_API_KEY" },
+  { value: "gemini-3.1-flash-lite", label: "Gemini 3.1 Flash Lite",     description: "Ultra-leve e rápido — menor custo",      provider: "gemini", requiresKey: "GEMINI_API_KEY" },
+  { value: "gemini-2.0-flash",      label: "Gemini 2.0 Flash",          description: "Muito rápido, menor custo",              provider: "gemini", requiresKey: "GEMINI_API_KEY" },
+  { value: "gemini-1.5-flash",      label: "Gemini 1.5 Flash",          description: "Versão estável anterior",                provider: "gemini", requiresKey: "GEMINI_API_KEY" },
+  { value: "gemini-1.5-pro",        label: "Gemini 1.5 Pro",            description: "Versão pro estável anterior",            provider: "gemini", requiresKey: "GEMINI_API_KEY" },
   // Groq
   { value: "groq:llama-3.3-70b-versatile", label: "Llama 3.3 70B (Groq)", description: "Muito capaz, ultra-rápido via Groq",    provider: "groq", requiresKey: "GROQ_API_KEY" },
   { value: "groq:llama-3.1-8b-instant",    label: "Llama 3.1 8B Instant (Groq)", description: "Extremamente rápido e leve",  provider: "groq", requiresKey: "GROQ_API_KEY" },
