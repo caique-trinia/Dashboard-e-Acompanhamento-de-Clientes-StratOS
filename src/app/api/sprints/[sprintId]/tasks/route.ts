@@ -12,7 +12,7 @@ export async function GET(
   const { sprintId } = await params;
   const { data, error } = await supabase
     .from("sprint_tasks")
-    .select("*, module_tasks(task_number, section)")
+    .select("*")
     .eq("sprint_id", sprintId)
     .order("sort_order");
 
@@ -30,27 +30,16 @@ export async function POST(
 
   const { sprintId } = await params;
   const body = await req.json();
-  const { moduleTaskIds } = body as { moduleTaskIds: string[] };
+  const { tasks } = body as { tasks: { name: string; description?: string }[] };
 
-  if (!Array.isArray(moduleTaskIds) || moduleTaskIds.length === 0) {
-    return NextResponse.json({ error: "moduleTaskIds array obrigatório" }, { status: 400 });
+  if (!Array.isArray(tasks) || tasks.length === 0) {
+    return NextResponse.json({ error: "tasks array obrigatório" }, { status: 400 });
   }
 
-  // Fetch module tasks to get their names/descriptions
-  const { data: moduleTasks, error: fetchError } = await supabase
-    .from("module_tasks")
-    .select("id, name, description")
-    .in("id", moduleTaskIds);
-
-  if (fetchError || !moduleTasks) {
-    return NextResponse.json({ error: "Erro ao buscar tarefas do módulo" }, { status: 500 });
-  }
-
-  const rows = moduleTasks.map((mt, idx) => ({
+  const rows = tasks.map((t, idx) => ({
     sprint_id: sprintId,
-    module_task_id: mt.id,
-    name: mt.name,
-    description: mt.description ?? null,
+    name: t.name,
+    description: t.description ?? null,
     status: "pending" as const,
     sort_order: idx,
   }));

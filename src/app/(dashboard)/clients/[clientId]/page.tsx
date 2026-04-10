@@ -4,6 +4,9 @@ import { Topbar } from "@/components/layout/Topbar";
 import { HealthScoreBadge } from "@/components/ai/HealthScoreBadge";
 import { AuditLogTable } from "@/components/ai/AuditLogTable";
 import { ClientActions } from "@/components/clients/ClientActions";
+import { ClientProjectTabs } from "@/components/clients/ClientProjectTabs";
+import { ClientProjectManager } from "@/components/clients/ClientProjectManager";
+import { ProjectDashboard } from "@/components/clients/ProjectDashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
@@ -13,10 +16,13 @@ import { formatDate } from "@/lib/utils";
 
 export default async function ClientDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ clientId: string }>;
+  searchParams: Promise<{ project?: string }>;
 }) {
   const { clientId } = await params;
+  const { project: projectParam } = await searchParams;
   const supabase = await createClient();
 
   const { data: client } = await supabase
@@ -27,7 +33,12 @@ export default async function ClientDetailPage({
 
   if (!client) notFound();
 
-  const [{ data: sprints }, { data: recentMeetings }] = await Promise.all([
+  const [{ data: projects }, { data: sprints }, { data: recentMeetings }] = await Promise.all([
+    supabase
+      .from("client_asana_projects")
+      .select("*")
+      .eq("client_id", clientId)
+      .order("sort_order"),
     supabase
       .from("sprints")
       .select("*")
@@ -43,13 +54,22 @@ export default async function ClientDetailPage({
   ]);
 
   const activeSprint = sprints?.find((s) => s.status === "active");
+  const activeProjectGid = projectParam ?? projects?.[0]?.project_gid ?? null;
 
   return (
     <div>
       <Topbar
         title={client.name}
-        subtitle={client.asana_project_name ?? "Projeto Asana"}
-        actions={<ClientActions clientId={client.id} clientName={client.name} />}
+        subtitle={projects && projects.length > 0 ? `${projects.length} projeto(s) Asana` : (client.asana_project_name ?? "Projeto Asana")}
+        actions={
+          <div className="flex items-center gap-2">
+            <ClientProjectManager
+              clientId={clientId}
+              workspaceId={client.asana_workspace_id}
+            />
+            <ClientActions clientId={client.id} clientName={client.name} />
+          </div>
+        }
       />
       <div className="p-6 space-y-6">
         {/* Health + Context */}
@@ -78,6 +98,25 @@ export default async function ClientDetailPage({
             </CardContent>
           </Card>
         </div>
+
+        {/* Project tabs + performance dashboard */}
+        {activeProjectGid && (
+          <Card>
+            <CardHeader className="pb-0">
+              <ClientProjectTabs
+                projects={projects ?? []}
+                activeGid={activeProjectGid}
+                clientId={clientId}
+              />
+            </CardHeader>
+            <CardContent className="pt-4">
+              <ProjectDashboard
+                projectGid={activeProjectGid}
+                clientId={clientId}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         {/* Sprint + Meetings */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

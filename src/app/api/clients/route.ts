@@ -50,5 +50,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Mirror the primary project into client_asana_projects
+  await supabase.from("client_asana_projects").insert({
+    client_id: data.id,
+    project_gid: asana_project_id,
+    project_name: asana_project_name ?? asana_project_id,
+    sort_order: 0,
+  });
+
   return NextResponse.json(data, { status: 201 });
 }

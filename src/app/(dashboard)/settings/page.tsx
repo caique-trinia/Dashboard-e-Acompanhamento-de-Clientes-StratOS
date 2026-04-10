@@ -4,7 +4,12 @@ import { useState, useEffect } from "react";
 import { Topbar } from "@/components/layout/Topbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, Info, Bot, Loader2, Zap } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, Info, Bot, Loader2, Zap, User } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import type { SystemSettings, AvailableModel } from "@/lib/settings";
 
 interface SettingsData {
@@ -12,18 +17,38 @@ interface SettingsData {
   availableModels: AvailableModel[];
   groqConfigured: boolean;
   geminiConfigured: boolean;
+  profile: { email: string | null; name: string | null };
 }
 
 export default function SettingsPage() {
+  const { toast } = useToast();
   const [data, setData] = useState<SettingsData | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
 
   useEffect(() => {
     fetch("/api/settings")
       .then((r) => r.json())
-      .then(setData);
+      .then((d) => {
+        setData(d);
+        setProfileName(d.profile?.name ?? "");
+      });
   }, []);
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingProfile(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ data: { full_name: profileName } });
+    setSavingProfile(false);
+    if (error) {
+      toast({ title: "Erro ao salvar perfil", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Perfil atualizado!" });
+    }
+  }
 
   async function handleModelChange(model: string) {
     if (!data) return;
@@ -50,6 +75,42 @@ export default function SettingsPage() {
     <div>
       <Topbar title="Configurações" subtitle="Informações do sistema e variáveis de ambiente" />
       <div className="p-6 space-y-4 max-w-2xl">
+
+        {/* Profile */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Perfil
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!data ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+              </div>
+            ) : (
+              <form onSubmit={handleSaveProfile} className="space-y-3 max-w-sm">
+                <div className="space-y-1">
+                  <Label>Email</Label>
+                  <Input value={data.profile?.email ?? ""} disabled className="bg-slate-50" />
+                </div>
+                <div className="space-y-1">
+                  <Label>Nome de exibição</Label>
+                  <Input
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    placeholder="Seu nome"
+                  />
+                </div>
+                <Button type="submit" size="sm" disabled={savingProfile}>
+                  {savingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Salvar
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
 
         {/* AI Model Selector */}
         <Card>

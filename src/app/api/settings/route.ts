@@ -11,7 +11,12 @@ export async function GET() {
   const groqConfigured = !!process.env.GROQ_API_KEY;
   const geminiConfigured = !!process.env.GEMINI_API_KEY;
 
-  return NextResponse.json({ settings, availableModels: AVAILABLE_MODELS, groqConfigured, geminiConfigured });
+  const profile = {
+    email: user.email ?? null,
+    name: user.user_metadata?.full_name ?? user.user_metadata?.name ?? null,
+  };
+
+  return NextResponse.json({ settings, availableModels: AVAILABLE_MODELS, groqConfigured, geminiConfigured, profile });
 }
 
 export async function POST(req: NextRequest) {

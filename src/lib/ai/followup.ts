@@ -10,6 +10,119 @@ import type { FollowUpAction, HealthAnalysisResponse } from "@/types/ai";
 
 const RATE_LIMIT_DELAY = 500;
 
+async function runFollowUpForProject(
+  client: Client,
+  projectGid: string,
+  projectName: string,
+  triggeredBy: "cron" | "manual" | "user",
+  meetingContext: string | null,
+  activeSprint: { id: string; name: string; goal: string | null; start_date: string | null; end_date: string | null } | null,
+  openActionItems: { description: string; assignee: string | null; due_date: string | null }[]
+): Promise<{ actionsExecuted: number; errors: string[] }> {
+  const supabase = createServiceClient();
+  const errors: string[] = [];
+  let actionsExecuted = 0;
+
+  const [sections, tasks] = await Promise.all([
+    getProjectSections(projectGid),
+    getProjectTasks(projectGid),
+  ]);
+
+  await sleep(RATE_LIMIT_DELAY);
+
+  // Fetch recent stories for active tasks
+  const activeTasks = tasks.filter((t) => !t.completed).slice(0, 10);
+  const allComments: { taskName: string; text: string; author: string; date: string }[] = [];
+
+  for (const task of activeTasks) {
+    try {
+      const stories = await getTaskStories(task.gid);
+      const recentCutoff = new Date();
+      recentCutoff.setDate(recentCutoff.getDate() - 7);
+      const recent = stories.filter((s) => new Date(s.created_at) > recentCutoff);
+      for (const story of recent) {
+        allComments.push({
+          taskName: task.name,
+          text: story.text.slice(0, 200),
+          author: story.created_by.name,
+          date: story.created_at.slice(0, 10),
+        });
+      }
+      await sleep(RATE_LIMIT_DELAY);
+    } catch {
+      // Skip if stories fetch fails for a task
+    }
+  }
+
+  const promptContext = {
+    clientName: `${client.name} — ${projectName}`,
+    clientContextNotes: client.context_notes,
+    asanaTasks: tasks.map((t) => ({
+      gid: t.gid,
+      name: t.name,
+      completed: t.completed,
+      section_name: t.memberships?.[0]?.section?.name ?? null,
+      due_on: t.due_on,
+      notes: t.notes?.slice(0, 200) ?? "",
+    })),
+    recentComments: allComments.slice(0, 20),
+    meetingContext,
+    sections,
+    activeSprint,
+    openActionItems,
+  };
+
+  const prompt = buildFollowUpPrompt(promptContext);
+  const actions = await generateJson<FollowUpAction[]>(prompt);
+
+  for (const action of actions) {
+    try {
+      if (action.type === "comment") {
+        await addComment(action.taskGid, action.text);
+        await supabase.from("ai_audit_log").insert({
+          client_id: client.id,
+          action_type: "follow_up_comment",
+          triggered_by: triggeredBy,
+          prompt_summary: prompt.slice(0, 500),
+          ai_response_summary: JSON.stringify(actions).slice(0, 500),
+          asana_task_id: action.taskGid,
+          asana_action: { type: "comment", text: action.text, projectGid },
+          success: true,
+        });
+        actionsExecuted++;
+        await sleep(RATE_LIMIT_DELAY);
+      } else if (action.type === "move") {
+        await moveTaskToSection(action.taskGid, action.toSectionGid);
+        await supabase.from("ai_audit_log").insert({
+          client_id: client.id,
+          action_type: "task_moved",
+          triggered_by: triggeredBy,
+          prompt_summary: prompt.slice(0, 500),
+          ai_response_summary: JSON.stringify(actions).slice(0, 500),
+          asana_task_id: action.taskGid,
+          asana_action: { type: "move", toSectionGid: action.toSectionGid, projectGid },
+          success: true,
+        });
+        actionsExecuted++;
+        await sleep(RATE_LIMIT_DELAY);
+      }
+    } catch (err) {
+      const msg = (err as Error).message;
+      errors.push(`Ação ${action.type} (${projectName}): ${msg}`);
+      await supabase.from("ai_audit_log").insert({
+        client_id: client.id,
+        action_type: action.type === "comment" ? "follow_up_comment" : "task_moved",
+        triggered_by: triggeredBy,
+        asana_task_id: "taskGid" in action ? action.taskGid : null,
+        success: false,
+        error_message: msg,
+      });
+    }
+  }
+
+  return { actionsExecuted, errors };
+}
+
 export async function runFollowUpForClient(
   client: Client,
   triggeredBy: "cron" | "manual" | "user" = "cron"
@@ -22,41 +135,27 @@ export async function runFollowUpForClient(
   let actionsExecuted = 0;
 
   try {
-    // Fetch Asana data
-    const [sections, tasks] = await Promise.all([
-      getProjectSections(client.asana_project_id),
-      getProjectTasks(client.asana_project_id),
-    ]);
+    // Fetch all projects for this client
+    const { data: projects } = await supabase
+      .from("client_asana_projects")
+      .select("project_gid, project_name")
+      .eq("client_id", client.id)
+      .order("sort_order");
 
-    await sleep(RATE_LIMIT_DELAY);
+    // Fall back to the legacy asana_project_id if no projects in new table
+    const projectList =
+      projects && projects.length > 0
+        ? projects
+        : client.asana_project_id
+        ? [{ project_gid: client.asana_project_id, project_name: client.asana_project_name ?? client.asana_project_id }]
+        : [];
 
-    // Fetch recent stories (comments) for non-completed tasks — limit to avoid rate limits
-    const activeTasks = tasks.filter((t) => !t.completed).slice(0, 10);
-    const allComments: { taskName: string; text: string; author: string; date: string }[] = [];
-
-    for (const task of activeTasks) {
-      try {
-        const stories = await getTaskStories(task.gid);
-        const recentCutoff = new Date();
-        recentCutoff.setDate(recentCutoff.getDate() - 7);
-        const recent = stories.filter(
-          (s) => new Date(s.created_at) > recentCutoff
-        );
-        for (const story of recent) {
-          allComments.push({
-            taskName: task.name,
-            text: story.text.slice(0, 200),
-            author: story.created_by.name,
-            date: story.created_at.slice(0, 10),
-          });
-        }
-        await sleep(RATE_LIMIT_DELAY);
-      } catch {
-        // Skip if stories fetch fails for a task
-      }
+    if (projectList.length === 0) {
+      errors.push(`Cliente ${client.name} não possui projetos Asana configurados.`);
+      return { actionsExecuted, errors };
     }
 
-    // Fetch last 3 meeting notes
+    // Fetch shared context (meetings + sprint) once for all projects
     const { data: meetingNotes } = await supabase
       .from("meeting_notes")
       .select("title, content, meeting_type, created_at")
@@ -64,18 +163,18 @@ export async function runFollowUpForClient(
       .order("created_at", { ascending: false })
       .limit(3);
 
-    const meetingContext = meetingNotes && meetingNotes.length > 0
-      ? meetingNotes
-          .map((m, i) => {
-            const label = i === 0 ? "ÚLTIMA REUNIÃO" : `REUNIÃO ANTERIOR ${i}`;
-            const type = m.meeting_type ? ` (${m.meeting_type})` : "";
-            const date = m.created_at.slice(0, 10);
-            return `${label}${type} – ${date}:\n${m.content}`;
-          })
-          .join("\n\n---\n\n")
-      : null;
+    const meetingContext =
+      meetingNotes && meetingNotes.length > 0
+        ? meetingNotes
+            .map((m, i) => {
+              const label = i === 0 ? "ÚLTIMA REUNIÃO" : `REUNIÃO ANTERIOR ${i}`;
+              const type = m.meeting_type ? ` (${m.meeting_type})` : "";
+              const date = m.created_at.slice(0, 10);
+              return `${label}${type} – ${date}:\n${m.content}`;
+            })
+            .join("\n\n---\n\n")
+        : null;
 
-    // Fetch active sprint metadata
     const { data: activeSprints } = await supabase
       .from("sprints")
       .select("id, name, goal, start_date, end_date, status")
@@ -85,7 +184,6 @@ export async function runFollowUpForClient(
 
     const activeSprint = activeSprints?.[0] ?? null;
 
-    // Fetch open action items from last 3 meetings
     let openActionItems: { description: string; assignee: string | null; due_date: string | null }[] = [];
     if (meetingNotes && meetingNotes.length > 0) {
       const { data: meetingIds } = await supabase
@@ -107,73 +205,27 @@ export async function runFollowUpForClient(
       }
     }
 
-    // Build prompt context
-    const promptContext = {
-      clientName: client.name,
-      clientContextNotes: client.context_notes,
-      asanaTasks: tasks.map((t) => ({
-        gid: t.gid,
-        name: t.name,
-        completed: t.completed,
-        section_name: t.memberships?.[0]?.section?.name ?? null,
-        due_on: t.due_on,
-        notes: t.notes?.slice(0, 200) ?? "",
-      })),
-      recentComments: allComments.slice(0, 20),
-      meetingContext,
-      sections,
-      activeSprint,
-      openActionItems,
-    };
+    // Run follow-up for each project (sequential to respect rate limits)
+    const results = await Promise.allSettled(
+      projectList.map((p) =>
+        runFollowUpForProject(
+          client,
+          p.project_gid,
+          p.project_name,
+          triggeredBy,
+          meetingContext,
+          activeSprint,
+          openActionItems
+        )
+      )
+    );
 
-    const prompt = buildFollowUpPrompt(promptContext);
-
-    // Call Gemini
-    const actions = await generateJson<FollowUpAction[]>(prompt);
-
-    // Execute actions
-    for (const action of actions) {
-      try {
-        if (action.type === "comment") {
-          await addComment(action.taskGid, action.text);
-          await supabase.from("ai_audit_log").insert({
-            client_id: client.id,
-            action_type: "follow_up_comment",
-            triggered_by: triggeredBy,
-            prompt_summary: prompt.slice(0, 500),
-            ai_response_summary: JSON.stringify(actions).slice(0, 500),
-            asana_task_id: action.taskGid,
-            asana_action: { type: "comment", text: action.text },
-            success: true,
-          });
-          actionsExecuted++;
-          await sleep(RATE_LIMIT_DELAY);
-        } else if (action.type === "move") {
-          await moveTaskToSection(action.taskGid, action.toSectionGid);
-          await supabase.from("ai_audit_log").insert({
-            client_id: client.id,
-            action_type: "task_moved",
-            triggered_by: triggeredBy,
-            prompt_summary: prompt.slice(0, 500),
-            ai_response_summary: JSON.stringify(actions).slice(0, 500),
-            asana_task_id: action.taskGid,
-            asana_action: { type: "move", toSectionGid: action.toSectionGid },
-            success: true,
-          });
-          actionsExecuted++;
-          await sleep(RATE_LIMIT_DELAY);
-        }
-      } catch (err) {
-        const msg = (err as Error).message;
-        errors.push(`Ação ${action.type}: ${msg}`);
-        await supabase.from("ai_audit_log").insert({
-          client_id: client.id,
-          action_type: action.type === "comment" ? "follow_up_comment" : "task_moved",
-          triggered_by: triggeredBy,
-          asana_task_id: "taskGid" in action ? action.taskGid : null,
-          success: false,
-          error_message: msg,
-        });
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        actionsExecuted += result.value.actionsExecuted;
+        errors.push(...result.value.errors);
+      } else {
+        errors.push(String(result.reason));
       }
     }
   } catch (err) {
@@ -195,7 +247,18 @@ export async function runHealthAnalysis(client: Client): Promise<void> {
   const supabase = createServiceClient();
 
   try {
-    const tasks = await getProjectTasks(client.asana_project_id);
+    // Use the first project for health analysis
+    const { data: projects } = await supabase
+      .from("client_asana_projects")
+      .select("project_gid")
+      .eq("client_id", client.id)
+      .order("sort_order")
+      .limit(1);
+
+    const projectGid = projects?.[0]?.project_gid ?? client.asana_project_id;
+    if (!projectGid) return;
+
+    const tasks = await getProjectTasks(projectGid);
     const now = new Date();
     const staleCutoff = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
@@ -213,13 +276,13 @@ export async function runHealthAnalysis(client: Client): Promise<void> {
     ).length;
 
     const blockedTasks = tasks.filter((t) =>
-      t.memberships?.some((m) =>
-        m.section?.name?.toLowerCase().includes("bloqueado") ||
-        m.section?.name?.toLowerCase().includes("blocked")
+      t.memberships?.some(
+        (m) =>
+          m.section?.name?.toLowerCase().includes("bloqueado") ||
+          m.section?.name?.toLowerCase().includes("blocked")
       )
     ).length;
 
-    // Collect a sample of recent comments
     const recentComments: string[] = [];
     for (const task of tasks.filter((t) => !t.completed).slice(0, 5)) {
       try {

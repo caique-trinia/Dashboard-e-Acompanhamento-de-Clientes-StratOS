@@ -31,27 +31,12 @@ export interface Client {
   created_by: string | null;
 }
 
-export interface ModuleLibrary {
+export interface ClientAsanaProject {
   id: string;
   created_at: string;
-  name: string;
-  description: string | null;
-  file_name: string;
-  imported_by: string | null;
-  task_count: number;
-}
-
-export interface ModuleTask {
-  id: string;
-  library_id: string;
-  task_number: string;
-  name: string;
-  description: string | null;
-  section: string;
-  manual_section: string | null;
-  parent_task_number: string | null;
-  parent_id: string | null;
-  depth: number;
+  client_id: string;
+  project_gid: string;
+  project_name: string;
   sort_order: number;
 }
 
@@ -73,7 +58,6 @@ export interface SprintTask {
   id: string;
   created_at: string;
   sprint_id: string;
-  module_task_id: string | null;
   asana_task_id: string | null;
   name: string;
   description: string | null;

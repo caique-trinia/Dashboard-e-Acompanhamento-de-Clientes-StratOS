@@ -1,5 +1,4 @@
 import type { FollowUpContext, HealthContext } from "@/types/ai";
-import type { ModuleTask } from "@/types/database";
 import type { AsanaTask } from "@/types/asana";
 
 function formatDateBR(dateStr: string | null | undefined): string {
@@ -101,51 +100,6 @@ REGRAS:
 Formato: [{"type": "comment"|"move", ...}, ...]`;
 }
 
-export function buildSuggestTasksPrompt(
-  clientName: string,
-  clientContextNotes: string | null,
-  recentAsanaTasks: AsanaTask[],
-  availableModuleTasks: ModuleTask[]
-): string {
-  const recentText = recentAsanaTasks
-    .slice(0, 30)
-    .map((t) => `  - "${t.name}" (concluída: ${t.completed})`)
-    .join("\n");
-
-  const moduleText = availableModuleTasks
-    .slice(0, 200)
-    .map(
-      (t) =>
-        `  id:${t.id} | ${t.task_number} | "${t.name}" | Seção: ${t.section}`
-    )
-    .join("\n");
-
-  return `Você é um consultor de metodologia de negócios. Seu trabalho é recomendar quais tarefas da biblioteca de módulos devem ser incluídas na próxima sprint.
-
-CLIENTE: ${clientName}
-CONTEXTO DO CLIENTE: ${clientContextNotes ?? "Sem contexto."}
-
-ATIVIDADE RECENTE DO PROJETO (últimos 30 dias):
-${recentText || "  Nenhuma atividade recente."}
-
-TAREFAS DO MÓDULO DISPONÍVEIS (ainda não adicionadas a uma sprint):
-${moduleText}
-
-Com base no momentum atual do projeto, contexto do cliente e atividade recente, sugira as tarefas mais adequadas para a próxima sprint.
-
-Retorne um objeto JSON:
-{
-  "suggestions": [
-    {
-      "moduleTaskId": "uuid-da-tarefa",
-      "reasoning": "uma frase explicando por que esta tarefa é relevante agora"
-    }
-  ],
-  "sprintFocusSummary": "resumo em 2-3 frases do foco recomendado para a sprint"
-}
-
-Limite a 15 sugestões. Priorize tarefas que logicamente seguem o que foi recentemente concluído. Responda em português.`;
-}
 
 export function buildHealthPrompt(ctx: HealthContext): string {
   const commentsText =
